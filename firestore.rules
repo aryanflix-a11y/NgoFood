@@ -1,0 +1,152 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: donations
+    // Document ID: auto-generated
+    // Fields:
+    //   - donor: string (required) - Name of the donor
+    //   - type: string (required) - Restaurant or Individual
+    //   - items: string (required) - Description of the food items
+    //   - location: string (required) - Pickup location
+    //   - status: string (required) - Available, Matched, Completed
+    //   - time: string (optional) - Best pickup time
+    //   - temperature: string (optional) - Hot, Cold, Frozen, Ambient
+    //   - deadline: string (optional) - Pickup deadline
+    //   - contact: string (optional) - Contact number
+    //   - donorRating: number (optional) - Average rating of the donor
+    //   - authorUid: string (required) - UID of the donor user
+    //   - createdAt: timestamp (required) - When the donation was created
+    //
+    // Collection: connections
+    // Document ID: auto-generated
+    // Fields:
+    //   - donationId: string (required) - ID of the original donation
+    //   - restaurant: string (required) - Name of the donor restaurant
+    //   - ngo: string (required) - Name of the matched NGO
+    //   - donationItems: string (required) - Items being donated
+    //   - status: string (required) - Pending, In Transit, Completed
+    //   - timestamp: timestamp (required) - When the connection was made
+    //   - rated: bool (required) - Whether the NGO has rated this donation
+    //   - donorUid: string (required) - UID of the donor
+    //   - ngoUid: string (required) - UID of the NGO
+    //
+    // Collection: messages
+    // Document ID: auto-generated
+    // Fields:
+    //   - connectionId: string (required) - ID of the connection this message belongs to
+    //   - sender: string (required) - Name of the sender
+    //   - senderUid: string (required) - UID of the sender
+    //   - text: string (required) - Content of the message
+    //   - timestamp: timestamp (required) - When the message was sent
+    //
+    // Collection: users
+    // Document ID: user's UID
+    // Fields:
+    //   - displayName: string (required) - User's display name
+    //   - email: string (required) - User's email address
+    //   - role: string (required) - restaurant, ngo, admin
+    //   - rating: number (optional) - User's average rating
+    //   - location: string (optional) - User's primary area
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "aryanflix@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDonation(data) {
+      return data.donor is string && data.donor.size() > 0 && data.donor.size() < 100 &&
+             data.type in ['Restaurant', 'Individual'] &&
+             data.items is string && data.items.size() > 0 && data.items.size() < 500 &&
+             data.location is string && data.location.size() > 0 && data.location.size() < 200 &&
+             data.status in ['Available', 'Matched', 'Completed'] &&
+             data.authorUid == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidConnection(data) {
+      return data.donationId is string &&
+             data.restaurant is string &&
+             data.ngo is string &&
+             data.donationItems is string &&
+             data.status in ['Pending', 'In Transit', 'Completed'] &&
+             data.timestamp is timestamp &&
+             data.rated is bool &&
+             data.donorUid is string &&
+             data.ngoUid is string;
+    }
+
+    function isValidMessage(data) {
+      return data.connectionId is string &&
+             data.sender is string &&
+             data.senderUid == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidUser(data) {
+      return data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['restaurant', 'ngo', 'admin'];
+    }
+
+    function isParticipantInConnection(connId) {
+      let conn = get(/databases/$(database)/documents/connections/$(connId)).data;
+      return request.auth.uid == conn.donorUid || request.auth.uid == conn.ngoUid;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role != 'admin' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /donations/{donationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidDonation(request.resource.data);
+      allow update: if isAuthenticated() && (
+        (isOwner(resource.data.authorUid) && isValidDonation(request.resource.data)) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && request.resource.data.status == 'Matched')
+      );
+      allow delete: if isOwner(resource.data.authorUid) || isAdmin();
+    }
+
+    match /connections/{connectionId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.donorUid || request.auth.uid == resource.data.ngoUid || isAdmin());
+      allow create: if isAuthenticated() && isValidConnection(request.resource.data) && (request.auth.uid == request.resource.data.donorUid || request.auth.uid == request.resource.data.ngoUid);
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.donorUid || request.auth.uid == resource.data.ngoUid) && isValidConnection(request.resource.data);
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && (isParticipantInConnection(resource.data.connectionId) || isAdmin());
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data) && isParticipantInConnection(request.resource.data.connectionId);
+    }
+  }
+}

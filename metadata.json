@@ -1,0 +1,5 @@
+{
+  "name": "FoodBridge NGO Connect",
+  "description": "A platform connecting restaurants and individual donors with NGOs to reduce food waste and feed those in need.",
+  "requestFramePermissions": ["geolocation"]
+}

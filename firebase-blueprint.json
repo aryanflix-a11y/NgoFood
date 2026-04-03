@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "Donation": {
+      "title": "Donation",
+      "description": "Food surplus donation from a restaurant or individual.",
+      "type": "object",
+      "properties": {
+        "donor": { "type": "string", "description": "Name of the donor." },
+        "type": { "type": "string", "enum": ["Restaurant", "Individual"], "description": "Type of donor." },
+        "items": { "type": "string", "description": "Description of the food items." },
+        "location": { "type": "string", "description": "Pickup location." },
+        "status": { "type": "string", "enum": ["Available", "Matched", "Completed"], "description": "Current status of the donation." },
+        "time": { "type": "string", "description": "Best pickup time." },
+        "temperature": { "type": "string", "enum": ["Hot", "Cold", "Frozen", "Ambient"], "description": "Food storage temperature." },
+        "deadline": { "type": "string", "format": "date-time", "description": "Pickup deadline." },
+        "contact": { "type": "string", "description": "Contact number." },
+        "donorRating": { "type": "number", "description": "Average rating of the donor." },
+        "authorUid": { "type": "string", "description": "UID of the donor user." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the donation was created." }
+      },
+      "required": ["donor", "type", "items", "location", "status", "authorUid", "createdAt"]
+    },
+    "Connection": {
+      "title": "Connection",
+      "description": "A match between a donor and an NGO.",
+      "type": "object",
+      "properties": {
+        "donationId": { "type": "string", "description": "ID of the original donation." },
+        "restaurant": { "type": "string", "description": "Name of the donor restaurant." },
+        "ngo": { "type": "string", "description": "Name of the matched NGO." },
+        "donationItems": { "type": "string", "description": "Items being donated." },
+        "status": { "type": "string", "enum": ["Pending", "In Transit", "Completed"], "description": "Status of the pickup." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the connection was made." },
+        "rated": { "type": "boolean", "description": "Whether the NGO has rated this donation." },
+        "donorUid": { "type": "string", "description": "UID of the donor." },
+        "ngoUid": { "type": "string", "description": "UID of the NGO." }
+      },
+      "required": ["donationId", "restaurant", "ngo", "donationItems", "status", "timestamp", "donorUid", "ngoUid"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A chat message between a donor and an NGO.",
+      "type": "object",
+      "properties": {
+        "connectionId": { "type": "string", "description": "ID of the connection this message belongs to." },
+        "sender": { "type": "string", "description": "Name of the sender." },
+        "senderUid": { "type": "string", "description": "UID of the sender." },
+        "text": { "type": "string", "description": "Content of the message." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the message was sent." }
+      },
+      "required": ["connectionId", "sender", "senderUid", "text", "timestamp"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile information.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string", "description": "User's display name." },
+        "email": { "type": "string", "format": "email", "description": "User's email address." },
+        "role": { "type": "string", "enum": ["restaurant", "ngo", "admin"], "description": "User's role." },
+        "rating": { "type": "number", "description": "User's average rating." },
+        "location": { "type": "string", "description": "User's primary area." }
+      },
+      "required": ["displayName", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/donations/{donationId}": { "schema": { "$ref": "Donation" }, "description": "Public food donations." },
+    "/connections/{connectionId}": { "schema": { "$ref": "Connection" }, "description": "Active matches." },
+    "/messages/{messageId}": { "schema": { "$ref": "Message" }, "description": "Chat messages." },
+    "/users/{userId}": { "schema": { "$ref": "User" }, "description": "User profiles." }
+  }
+}
